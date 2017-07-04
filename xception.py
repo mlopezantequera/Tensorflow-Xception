@@ -25,7 +25,7 @@ OPTIMIZATION CONFIGURATION (for Google JFT Dataset):
 '''
 
 def xception(inputs,
-            num_classes=1001,
+            num_classes=1000,
             is_training=True,
             scope='xception'):
 
@@ -133,10 +133,7 @@ def xception(inputs,
             net = tf.nn.relu(net, name='block14_relu2')
 
             net = slim.avg_pool2d(net, [10,10], scope='block15_avg_pool')
-            #Replace FC layer with conv layer instead
-            net = slim.conv2d(net, 2048, [1,1], scope='block15_conv1')
-            logits = slim.conv2d(net, num_classes, [1,1], activation_fn=None, scope='block15_conv2')
-            logits = tf.squeeze(logits, [1,2], name='block15_logits') #Squeeze height and width only
+            logits = slim.fully_connected(net, num_classes, activation_fn = None)
             predictions = slim.softmax(logits, scope='Predictions')
 
             end_points = slim.utils.convert_collection_to_dict(end_points_collection)
