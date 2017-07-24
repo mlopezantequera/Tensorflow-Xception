@@ -83,8 +83,10 @@ equivalences = {
   'block14_bn2' : 'batchnormalization_40',
   'fully_connected' : 'dense_2',}
 
-def get_assign_ops(graph, h5f):
+def get_assign_ops(h5f):
   assign_ops = []
+  notfound_vars = []
+  unused_layers = [layername for layername in h5f.keys() if len(h5f[layername].keys()) > 0]
   for var in tf.global_variables():
     n = var.op.name
     if n.split('/')[1] in equivalences.keys():
@@ -112,8 +114,20 @@ def get_assign_ops(graph, h5f):
         elif 'gamma' in n:
           keras_weightname = keras_layername + '_gamma:0'
 
-      value = h5f[keras_layername][keras_weightname][:]
-      assign_ops.append(var.assign(value))
+      if keras_layername in h5f.keys():
+        value = h5f[keras_layername][keras_weightname][:]
+        assign_ops.append(var.assign(value))
+        if keras_layername in unused_layers:
+          unused_layers.remove(keras_layername)
+      else:
+        print("{} not found in file. Returning init op for this variable".format(keras_weightname))
+        notfound_vars.append(var)
 
-  return assign_ops
+  if len(unused_layers) > 0:
+    print("The following weights were found in the file but not matched to any layer in the graph:")
+    print(unused_layers)
+
+  init_op = tf.variables_initializer(notfound_vars)
+
+  return assign_ops, init_op
 
