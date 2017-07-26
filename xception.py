@@ -25,9 +25,10 @@ OPTIMIZATION CONFIGURATION (for Google JFT Dataset):
 '''
 
 def xception(inputs,
-            num_classes=1000,
-            is_training=True,
-            scope='xception'):
+             num_classes=1000,
+             is_training=True,
+             last_block = 15,
+             scope='xception'):
 
     '''
     The Xception Model!
@@ -39,18 +40,29 @@ def xception(inputs,
     - inputs(Tensor): a 4D Tensor input of shape [batch_size, height, width, num_channels]
     - num_classes(int): the number of classes to predict
     - is_training(bool): Whether or not to train
+    - last_block: The model is built up to last_block (16 = full model with softmax)
 
     OUTPUTS:
     - logits (Tensor): raw, unactivated outputs of the final layer
     - end_points(dict): dictionary containing the outputs for each layer, including the 'Predictions'
                         containing the probabilities of each output.
     '''
+
+    if last_block > 16 or last_block < 1:
+        print("Unsupported value for last_block: {}".format(last_block))
+
     with tf.variable_scope('Xception') as sc:
         end_points_collection = sc.name + '_end_points'
         
         with slim.arg_scope([slim.separable_conv2d], depth_multiplier=1),\
          slim.arg_scope([slim.separable_conv2d, slim.conv2d, slim.avg_pool2d], outputs_collections=[end_points_collection]),\
          slim.arg_scope([slim.batch_norm], is_training=is_training):
+
+            block_count = 0
+            def finish(last_layer):
+                end_points = slim.utils.convert_collection_to_dict(end_points_collection)
+                end_points['last_layer'] = last_layer
+                return end_points
 
             #===========ENTRY FLOW==============
             #Block 1
@@ -62,6 +74,9 @@ def xception(inputs,
             net = tf.nn.relu(net, name='block1_relu2')
             residual = slim.conv2d(net, 128, [1,1], stride=2, scope='block1_res_conv')
             residual = slim.batch_norm(residual, scope='block1_res_bn')
+            block_count += 1
+            if block_count == last_block:
+                return finish(net)
 
             #Block 2
             net = slim.separable_conv2d(net, 128, [3,3], scope='block2_dws_conv1')
@@ -73,6 +88,9 @@ def xception(inputs,
             net = tf.add(net, residual, name='block2_add')
             residual = slim.conv2d(net, 256, [1,1], stride=2, scope='block2_res_conv')
             residual = slim.batch_norm(residual, scope='block2_res_bn')
+            block_count += 1
+            if block_count == last_block:
+                return finish(net)
 
             #Block 3
             net = tf.nn.relu(net, name='block3_relu1')
@@ -85,6 +103,9 @@ def xception(inputs,
             net = tf.add(net, residual, name='block3_add')
             residual = slim.conv2d(net, 728, [1,1], stride=2, scope='block3_res_conv')
             residual = slim.batch_norm(residual, scope='block3_res_bn')
+            block_count += 1
+            if block_count == last_block:
+                return finish(net)
 
             #Block 4
             net = tf.nn.relu(net, name='block4_relu1')
@@ -95,6 +116,9 @@ def xception(inputs,
             net = slim.batch_norm(net, scope='block4_bn2')
             net = slim.max_pool2d(net, [3,3], stride=2, padding='same', scope='block4_max_pool')
             net = tf.add(net, residual, name='block4_add')
+            block_count += 1
+            if block_count == last_block:
+                return finish(net)
 
             #===========MIDDLE FLOW===============
             for i in range(8):
@@ -111,7 +135,9 @@ def xception(inputs,
                 net = slim.separable_conv2d(net, 728, [3,3], scope=block_prefix+'dws_conv3')
                 net = slim.batch_norm(net, scope=block_prefix+'bn3')
                 net = tf.add(net, residual, name=block_prefix+'add')
-
+                block_count += 1
+                if block_count == last_block:
+                    return finish(net)
 
             #========EXIT FLOW============
             residual = slim.conv2d(net, 1024, [1,1], stride=2, scope='block12_res_conv')
@@ -124,6 +150,9 @@ def xception(inputs,
             net = slim.batch_norm(net, scope='block13_bn2')
             net = slim.max_pool2d(net, [3,3], stride=2, padding='same', scope='block13_max_pool')
             net = tf.add(net, residual, name='block13_add')
+            block_count += 1
+            if block_count == last_block: #13
+                return finish(net)
 
             net = slim.separable_conv2d(net, 1536, [3,3], scope='block14_dws_conv1')
             net = slim.batch_norm(net, scope='block14_bn1')
@@ -131,16 +160,23 @@ def xception(inputs,
             net = slim.separable_conv2d(net, 2048, [3,3], scope='block14_dws_conv2')
             net = slim.batch_norm(net, scope='block14_bn2')
             net = tf.nn.relu(net, name='block14_relu2')
+            block_count += 1
+            if block_count == last_block: #14
+                return finish(net)
 
             net = slim.avg_pool2d(net, [10,10], scope='block15_avg_pool')
+            block_count += 1
+            if block_count == last_block: #15
+                return finish(net)
+
             logits = slim.fully_connected(net, num_classes, activation_fn = None)
             predictions = slim.softmax(logits, scope='Predictions')
-
             end_points = slim.utils.convert_collection_to_dict(end_points_collection)
             end_points['Logits'] = logits
             end_points['Predictions'] = predictions
+            end_points['last_layer'] = predictions
 
-        return logits, end_points
+        return end_points #16
 
 def xception_arg_scope(weight_decay=0.00001,
                        batch_norm_decay=0.9997,
