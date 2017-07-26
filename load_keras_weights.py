@@ -119,13 +119,16 @@ def get_assign_ops(h5f):
         assign_ops.append(var.assign(value))
         if keras_layername in unused_layers:
           unused_layers.remove(keras_layername)
-      else:
-        print("{} not found in file. Returning init op for this variable".format(keras_weightname))
-        notfound_vars.append(var)
+    else:
+      notfound_vars.append(var)
 
   if len(unused_layers) > 0:
     print("The following weights were found in the file but not matched to any layer in the graph:")
     print(unused_layers)
+
+  if len(notfound_vars) > 0:
+    print("The following layers have no matching weights in the weights file. Returning init ops for them:")
+    print([var.name for var in notfound_vars])
 
   init_op = tf.variables_initializer(notfound_vars)
 
