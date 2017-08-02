@@ -86,11 +86,13 @@ equivalences = {
 def get_assign_ops(h5f):
   assign_ops = []
   notfound_vars = []
+  found_vars = []
   unused_layers = [layername for layername in h5f.keys() if len(h5f[layername].keys()) > 0]
   for var in tf.global_variables():
     n = var.op.name
-    if n.split('/')[1] in equivalences.keys():
-      keras_layername = equivalences[n.split('/')[1]]
+    k = n.split('/')[-2]
+    if k in equivalences.keys():
+      keras_layername = equivalences[k]
       if 'dws' in n:
         if 'depthwise' in n:
           keras_weightname = keras_layername + '_depthwise_kernel:0'
@@ -117,20 +119,19 @@ def get_assign_ops(h5f):
       if keras_layername in h5f.keys():
         value = h5f[keras_layername][keras_weightname][:]
         assign_ops.append(var.assign(value))
+        found_vars.append(var)
         if keras_layername in unused_layers:
           unused_layers.remove(keras_layername)
     else:
       notfound_vars.append(var)
 
   if len(unused_layers) > 0:
-    print("The following weights were found in the file but not matched to any layer in the graph:")
+    print("The following weights were found in the file but not matched to any layer in the graph. Will be ignored:")
     print(unused_layers)
 
   if len(notfound_vars) > 0:
     print("The following layers have no matching weights in the weights file. Returning init ops for them:")
     print([var.name for var in notfound_vars])
 
-  init_op = tf.variables_initializer(notfound_vars)
-
-  return assign_ops, init_op
+    return assign_ops, found_vars, notfound_vars
 
