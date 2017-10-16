@@ -66,7 +66,8 @@ def xception(inputs,
 
             #===========ENTRY FLOW==============
             #Block 1
-            net = slim.conv2d(inputs, 32, [3,3], stride=2, padding='valid', scope='block1_conv1')
+            norm_in = tf.subtract(tf.cast(inputs, tf.float32), 128.0) / 128.0
+            net = slim.conv2d(norm_in, 32, [3,3], stride=2, padding='valid', scope='block1_conv1')
             net = slim.batch_norm(net, scope='block1_bn1')
             net = tf.nn.relu(net, name='block1_relu1')
             net = slim.conv2d(net, 64, [3,3], padding='valid', scope='block1_conv2')
